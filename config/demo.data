@@ -1,0 +1,6 @@
+classes= 5
+train=unsued
+valid=unused
+names=data/demo.names
+backup=backup/
+eval=unused
