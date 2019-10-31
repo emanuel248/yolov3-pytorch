@@ -6,6 +6,9 @@ import numpy as np
 from PIL import Image
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
+import imgaug as ia
+import imgaug.augmenters as iaa
 
 from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
@@ -55,6 +58,126 @@ class ImageFolder(Dataset):
     def __len__(self):
         return len(self.files)
 
+
+class SyntheticGenerator(Dataset):
+    def __init__(self, object_path, background_path, img_size=416, possible_positions=3, possible_sizes=4, augment=True, multiscale=True, normalized_labels=True):
+        self.img_size = img_size
+        self.objects_path = object_path
+        self.background_path = background_path
+        self.augment = augment
+        self.multiscale = multiscale
+        self.normalized_labels = normalized_labels
+        self.min_size = self.img_size - 3 * 32
+        self.max_size = self.img_size + 3 * 32
+        self.batch_count = 0
+
+        available_object_classes = [f for f in os.listdir(self.objects_path) if os.path.isdir(os.path.join(self.objects_path, f))]
+        self.objects_available = []
+        for c in available_object_classes:
+            for img in os.listdir(os.path.join(self.objects_path, c)):
+                self.objects_available.append({'c': c, 'f': img})
+        self.backgrounds = os.listdir(self.background_path)
+        # could be parameters
+        self.possible_positions = possible_positions
+        self.possible_sizes = possible_sizes
+        self.augmentation_factor = 2
+
+        self.datasize = len(self.objects_available) * len(self.backgrounds) * self.possible_positions * self.possible_sizes
+        self.combinations = []
+
+        object_idx = np.random.randint(0,len(self.objects_available), len(self.objects_available) * len(self.backgrounds))
+        bg_idx = np.random.randint(0,len(self.backgrounds), len(self.objects_available) * len(self.backgrounds))
+        for e in range(len(self.objects_available) * len(self.backgrounds)):
+            o = self.objects_available[object_idx[e]]
+            b = self.backgrounds[bg_idx[e]]
+            for s in np.random.rand(self.possible_sizes):
+                for px in np.random.rand(self.possible_positions):
+                    py = np.random.rand()
+                    self.combinations.append({
+                        'o': o,
+                        'b': b,
+                        's': 0.3 + (s * 0.7),
+                        'p': [px*0.6, py*0.6]
+                    })
+        assert(self.datasize == len(self.combinations))
+        self.seq = iaa.Sequential([
+            iaa.Sometimes(0.5,
+            iaa.GaussianBlur(sigma=(0, 0.75))),
+            iaa.ContrastNormalization((0.35, 1.5))
+        ], random_order=True)
+
+    def __getitem__(self, index):
+        c = self.combinations[index]
+
+        img_path = os.path.join(self.objects_path, c['o']['c'], c['o']['f'])
+        bg_path = os.path.join(self.background_path,c['b'])
+        # Extract image as PyTorch tensor
+        bg = Image.open(bg_path).convert('RGB')
+        obj = Image.open(img_path)
+        angle = np.random.rand()*180
+        obj = obj.rotate( angle, expand=1 )
+        bw, bh = bg.size
+        iw, ih = obj.size
+
+        bg_dim = bw if bw > bh else bh
+        sm_obj_w = iw*c['s']
+        sm_obj_h = ih*c['s']
+        obj = obj.resize((int(sm_obj_w), int(sm_obj_h)))
+
+        r,g,b,a = obj.split()
+        rgb_img = Image.merge( 'RGB', (r, g, b))
+        
+        posx = c['p'][0]
+        posy = c['p'][1]
+        bg.paste(rgb_img, box=(int(bw*posx), int(bh*posy)), mask=a)
+        obj_mid_x = (bw*posx) + sm_obj_w/2
+        obj_mid_y = (bh*posy) + sm_obj_h/2
+
+        img = transforms.ToTensor()(bg)
+        # Pad to square resolution
+        img, _ = pad_to_square(img, 0)
+        _, padded_h, padded_w = img.shape
+
+        new_mid_x = (padded_w-bw+0.000001)/2+obj_mid_x
+        new_mid_y = (padded_h-bh+0.000001)/2+obj_mid_y
+
+        #calculate label box
+        #fields: 'class', 'x', 'y', 'w', 'h'
+        boxes = torch.zeros((1,5))
+        boxes[:, 0] = float(c['o']['c'])
+        boxes[:, 1] = new_mid_x/padded_w
+        boxes[:, 2] = new_mid_y/padded_h
+        boxes[:, 3] = sm_obj_w/bg_dim*1.06
+        boxes[:, 4] = sm_obj_h/bg_dim*1.06
+
+        #fields: 'sample index (set in collate_fn)', 'class', 'x', 'y', 'w', 'h'
+        targets = torch.zeros((len(boxes), 6))
+        targets[:, 1:] = boxes
+    
+        # Resize
+        img = resize(img, self.img_size)
+        img_aug = self.seq.augment_image(img)
+
+        return img_path, img, targets
+
+    def __len__(self):
+        return self.datasize
+
+    def collate_fn(self, batch):
+        paths, imgs, targets = list(zip(*batch))
+        # Remove empty placeholder targets
+        targets = [boxes for boxes in targets if boxes is not None]
+        # Add sample index to targets
+        for i, boxes in enumerate(targets):
+            boxes[:, 0] = i
+        targets = torch.cat(targets, 0)
+        # Selects new image size every tenth batch
+        if self.multiscale and self.batch_count % 10 == 0:
+            self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
+        # Resize images to input shape
+        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        self.batch_count += 1
+        return paths, imgs, targets
 
 class ListDataset(Dataset):
     def __init__(self, list_path, img_size=416, augment=True, multiscale=True, normalized_labels=True):

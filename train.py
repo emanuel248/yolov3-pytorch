@@ -6,6 +6,8 @@ from utils.utils import *
 from utils.datasets import *
 from utils.parse_config import *
 from test import evaluate
+from utils.datasets import SyntheticGenerator
+from tqdm import tqdm
 
 from terminaltables import AsciiTable
 
@@ -27,10 +29,12 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=8, help="size of each image batch")
     parser.add_argument("--gradient_accumulations", type=int, default=2, help="number of gradient accums before step")
-    parser.add_argument("--model_def", type=str, default="config/yolov3.cfg", help="path to model definition file")
-    parser.add_argument("--data_config", type=str, default="config/coco.data", help="path to data config file")
+    parser.add_argument("--model_def", type=str, default="config/yolov3_demo.cfg", help="path to model definition file")
+    parser.add_argument("--data_config", type=str, default="config/demo.data", help="path to data config file")
     parser.add_argument("--pretrained_weights", type=str, help="if specified starts from checkpoint model")
     parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
+    parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
+    parser.add_argument('--multi_gpu', type=str, default=None, help='whether use multi gpu training')
     parser.add_argument("--img_size", type=int, default=416, help="size of each image dimension")
     parser.add_argument("--checkpoint_interval", type=int, default=1, help="interval between saving model weights")
     parser.add_argument("--evaluation_interval", type=int, default=1, help="interval evaluations on validation set")
@@ -38,8 +42,10 @@ if __name__ == "__main__":
     parser.add_argument("--multiscale_training", default=True, help="allow for multi-scale training")
     opt = parser.parse_args()
     print(opt)
+    os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu if opt.multi_gpu is None else '0,1,2,3'
+    print('using gpu {}'.format(os.environ["CUDA_VISIBLE_DEVICES"]))
 
-    logger = Logger("logs")
+    logger = Logger("logs/{}".format(datetime.datetime.now()))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -64,7 +70,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training)
+    dataset = SyntheticGenerator('data/objects', 'data/backgrounds')
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt.batch_size,
@@ -77,23 +83,25 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters())
 
     metrics = [
-        "grid_size",
+        #"grid_size",
         "loss",
-        "x",
-        "y",
-        "w",
-        "h",
+        #"x",
+        #"y",
+        #"w",
+        #"h",
         "conf",
-        "cls",
+        #"cls",
         "cls_acc",
-        "recall50",
+        #"recall50",
         "recall75",
         "precision",
-        "conf_obj",
-        "conf_noobj",
+        #"conf_obj",
+        #"conf_noobj",
     ]
 
-    for epoch in range(opt.epochs):
+    epochs_logger = tqdm(total=len(dataloader), desc='Epoch', position=0, ascii=True, ncols=100)
+
+    for epoch in tqdm(range(opt.epochs), desc='Total', ascii=True, ncols=100):
         model.train()
         start_time = time.time()
         for batch_i, (_, imgs, targets) in enumerate(dataloader):
@@ -143,8 +151,8 @@ if __name__ == "__main__":
             time_left = datetime.timedelta(seconds=epoch_batches_left * (time.time() - start_time) / (batch_i + 1))
             log_str += f"\n---- ETA {time_left}"
 
-            print(log_str)
-
+            #epochs_logger.set_description_str(log_str)
+            epochs_logger.update(1)
             model.seen += imgs.size(0)
 
         if epoch % opt.evaluation_interval == 0:
@@ -157,7 +165,7 @@ if __name__ == "__main__":
                 conf_thres=0.5,
                 nms_thres=0.5,
                 img_size=opt.img_size,
-                batch_size=8,
+                batch_size=opt.batch_size,
             )
             evaluation_metrics = [
                 ("val_precision", precision.mean()),

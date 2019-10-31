@@ -1,16 +1,19 @@
+
+
 from __future__ import division
 
 from models import *
 from utils.utils import *
 from utils.datasets import *
 from utils.parse_config import *
+from utils.datasets import SyntheticGenerator
 
 import os
 import sys
 import time
 import datetime
 import argparse
-import tqdm
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -24,7 +27,7 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
     model.eval()
 
     # Get dataloader
-    dataset = ListDataset(path, img_size=img_size, augment=False, multiscale=False)
+    dataset = SyntheticGenerator('data/objects', 'data/backgrounds', img_size=416, possible_positions=2, possible_sizes=2)
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=dataset.collate_fn
     )
@@ -33,7 +36,7 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
 
     labels = []
     sample_metrics = []  # List of tuples (TP, confs, pred)
-    for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
+    for batch_i, (_, imgs, targets) in enumerate(tqdm(dataloader, desc="Detecting objects")):
 
         # Extract labels
         labels += targets[:, 1].tolist()
@@ -95,7 +98,7 @@ if __name__ == "__main__":
         conf_thres=opt.conf_thres,
         nms_thres=opt.nms_thres,
         img_size=opt.img_size,
-        batch_size=8,
+        batch_size=opt.batch_size,
     )
 
     print("Average Precisions:")
