@@ -44,7 +44,8 @@ if __name__ == "__main__":
     print(opt)
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu if opt.multi_gpu is None else '0,1,2,3'
     print('using gpu {}'.format(os.environ["CUDA_VISIBLE_DEVICES"]))
-    os.system("tensorboard --logdir logs --port 7676 &")
+    os.system("for p in `ps auxwf|grep tensorboard|awk '{print $2}'`;do kill -9 $p;done")
+    #os.system("2>/dev/null 1>&2 tensorboard --logdir logs --port 7676 &")
 
     logger = Logger("logs/{}".format(datetime.datetime.now()))
 

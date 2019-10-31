@@ -118,11 +118,13 @@ class SyntheticGenerator(Dataset):
         obj = obj.rotate( angle, expand=1 )
         bw, bh = bg.size
         iw, ih = obj.size
+        
 
         bg_dim = bw if bw > bh else bh
         sm_obj_w = iw*c['s']
         sm_obj_h = ih*c['s']
         obj = obj.resize((int(sm_obj_w), int(sm_obj_h)))
+        
 
         r,g,b,a = obj.split()
         rgb_img = Image.merge( 'RGB', (r, g, b))
@@ -158,7 +160,7 @@ class SyntheticGenerator(Dataset):
         img = resize(img, self.img_size)
         img_aug = self.seq.augment_image(img)
 
-        return img_path, img, targets
+        return img_path, torch.from_numpy(img_aug), targets
 
     def __len__(self):
         return self.datasize
