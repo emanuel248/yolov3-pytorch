@@ -44,7 +44,7 @@ if __name__ == "__main__":
     print(opt)
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu if opt.multi_gpu is None else '0,1,2,3'
     print('using gpu {}'.format(os.environ["CUDA_VISIBLE_DEVICES"]))
-    os.spawnl(os.P_NOWAIT, 'tensorboard --logdir logs --bind_all --prt 7676')
+    os.system("tensorboard --logdir logs --port 7676 &")
 
     logger = Logger("logs/{}".format(datetime.datetime.now()))
 
