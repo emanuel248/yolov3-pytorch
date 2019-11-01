@@ -186,4 +186,6 @@ if __name__ == "__main__":
             print(f"---- mAP {AP.mean()}")
 
         if epoch % opt.checkpoint_interval == 0:
+            print(f"saving checkpoint to %s/yolov3_ckpt_%d.pth" % opt.checkpoint_dir)
             torch.save(model.state_dict(), f"%s/yolov3_ckpt_%d.pth" % (opt.checkpoint_dir, epoch))
+            for f in os.listdir(f"%s" % opt.checkpoint_dir): print(f)
