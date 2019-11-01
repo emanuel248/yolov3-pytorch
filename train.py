@@ -16,6 +16,7 @@ import sys
 import time
 import datetime
 import argparse
+import zipfile
 
 import torch
 from torch.utils.data import DataLoader
@@ -103,6 +104,7 @@ if __name__ == "__main__":
     ]
 
     epochs_logger = tqdm(total=len(dataloader), desc='Epoch', position=0, ascii=True, ncols=100)
+    z = zipfile.ZipFile(f"%s/checkpoints.zip"%opt.checkpoint_dir, "w")
 
     for epoch in tqdm(range(opt.epochs), desc='Total', ascii=True, ncols=100):
         model.train()
@@ -187,5 +189,6 @@ if __name__ == "__main__":
 
         if epoch % opt.checkpoint_interval == 0:
             print(f"saving checkpoint to %s/yolov3_ckpt_%d.pth" % opt.checkpoint_dir)
-            torch.save(model.state_dict(), f"%s/yolov3_ckpt_%d.pth" % (opt.checkpoint_dir, epoch))
-            for f in os.listdir(f"%s" % opt.checkpoint_dir): print(f)
+            torch.save(model.state_dict(), f"/tmp/yolov3_ckpt_%d.pth" % epoch)
+            z.write(f"/tmp/yolov3_ckpt_%d.pth" % epoch)
+    z.close()
