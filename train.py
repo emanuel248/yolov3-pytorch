@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument('--multi_gpu', type=str, default=None, help='whether use multi gpu training')
     parser.add_argument("--img_size", type=int, default=416, help="size of each image dimension")
     parser.add_argument("--checkpoint_interval", type=int, default=1, help="interval between saving model weights")
+    parser.add_argument("--checkpoint_dir", type=str, default='checkpoints', help="checkpoints output directory")
     parser.add_argument("--evaluation_interval", type=int, default=1, help="interval evaluations on validation set")
     parser.add_argument("--compute_map", default=False, help="if True computes mAP every tenth batch")
     parser.add_argument("--multiscale_training", default=True, help="allow for multi-scale training")
@@ -45,7 +46,7 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu if opt.multi_gpu is None else '0,1,2,3'
     print('using gpu {}'.format(os.environ["CUDA_VISIBLE_DEVICES"]))
     os.system("for p in `ps auxwf|grep tensorboard|awk '{print $2}'`;do kill -9 $p;done")
-    #os.system("2>/dev/null 1>&2 tensorboard --logdir logs --port 7676 &")
+    os.system("tensorboard --logdir logs --port 7676 &")
 
     logger = Logger("logs/{}".format(datetime.datetime.now()))
 
@@ -185,4 +186,4 @@ if __name__ == "__main__":
             print(f"---- mAP {AP.mean()}")
 
         if epoch % opt.checkpoint_interval == 0:
-            torch.save(model.state_dict(), f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
+            torch.save(model.state_dict(), f"%s/yolov3_ckpt_%d.pth" % (checkpoint_dir, epoch))
