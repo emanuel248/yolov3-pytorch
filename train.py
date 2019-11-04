@@ -74,7 +74,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    dataset = SyntheticGenerator('data/objects', 'data/backgrounds')
+    dataset = SyntheticGenerator('data/objects', 'data/backgrounds', img_size=768, multiscale=False)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt.batch_size,

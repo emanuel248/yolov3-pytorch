@@ -96,14 +96,12 @@ class SyntheticGenerator(Dataset):
                     self.combinations.append({
                         'o': o,
                         'b': b,
-                        's': 0.3 + (s * 0.7),
+                        's': 0.5 + (s * 0.5),
                         'p': [px*0.6, py*0.6]
                     })
         assert(self.datasize == len(self.combinations))
         self.seq = iaa.Sequential([
-            iaa.Sometimes(0.5,
-            iaa.GaussianBlur(sigma=(0, 0.75))),
-            iaa.ContrastNormalization((0.35, 1.5))
+            iaa.ContrastNormalization((0.5, 1))
         ], random_order=True)
 
     def __getitem__(self, index):
@@ -161,6 +159,7 @@ class SyntheticGenerator(Dataset):
         img_aug = self.seq.augment_image(img)
 
         return img_path, torch.from_numpy(img_aug), targets
+        #return img_path, img, targets
 
     def __len__(self):
         return self.datasize
